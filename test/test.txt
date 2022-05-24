@@ -1,0 +1,5 @@
+func greet(str) {
+    return "Hello " + str;
+}
+
+print(greet("world!"));
