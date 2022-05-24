@@ -48,3 +48,4 @@ print(greet("world!"));
 ```
 Hello world!
 ```
+### Classes are in the code but don't use them because they make the interpreter crash.
