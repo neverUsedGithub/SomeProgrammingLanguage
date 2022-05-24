@@ -5,9 +5,12 @@ This is a programming language i made in like 2 days so don't expect much. If yo
 
 # Basics
 ### Installation
+##### Locally
 First, clone the repo: `git clone https://github.com/neverUsedGithub/SomeProgrammingLanguage`.  
 Second, open the clone repo: `cd SomeProgrammingLanguage`.  
 Third, run your program with: `node dist/index.js <FILE>`.  
+#### Replit
+Just open [this link](https://replit.com/github/neverUsedGithub/SomeProgrammingLanguage).
 ### Syntax
 The language's syntax is like python and js combined. `;`s are necessary unless the last character is a `}`.
 ### Variables
