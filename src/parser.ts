@@ -4,8 +4,9 @@ import { Error } from "./error"
 export const NodeType = {
     PROGRAM: "PROGRAM",
     BINARY_EXPR: "BINARYEXPRESSION",
-    SET_VARIABLE: "SETVARIABLE",
+    CREATE_VARIABLE: "CREATEVARIABLE",
     GET_VARIABLE: "GETVARIABLE",
+    ASSIGN_VARIABLE: "ASSIGNVARIABLE",
     FUNC_CALL: "FUNCCALL",
     INTEGER: "INTEGER",
     STRING: "STRING",
@@ -16,7 +17,9 @@ export const NodeType = {
     BOOLEAN: "BOOLEAN",
     CONDITION: "CONDITION",
     IF_STATEMENT: "IFSTATEMENT",
-    FLOAT: "FLOAT"
+    WHILE_STATEMENT: "WHILESTATEMENT",
+    FLOAT: "FLOAT",
+    ASSIGN_VARIABLE_SHORT: "ASSIGNVARIABLESHORT"
 }
 
 export class Parser {
@@ -311,13 +314,23 @@ export class Parser {
             }
             else if (this.current.type === TokenType.LESSTHAN) {
                 this.eat(TokenType.LESSTHAN)
-                this.eat(TokenType.EQUAL)
-                op = "<="
+                if (this.current.type !== TokenType.EQUAL) {
+                    op = "<"
+                }
+                else {
+                    this.eat(TokenType.EQUAL)
+                    op = "<="
+                }
             }
-            else {
+            else if (this.current.type === TokenType.MORETHAN) {
                 this.eat(TokenType.MORETHAN)
-                this.eat(TokenType.EQUAL)
-                op = ">="
+                if (this.current.type !== TokenType.EQUAL) {
+                    op = ">"
+                }
+                else {
+                    this.eat(TokenType.EQUAL)
+                    op = ">="
+                }
             }
         }
         else {
@@ -350,6 +363,54 @@ export class Parser {
 
     pExpression() {
 
+        if (
+            this.current.type === TokenType.IDENTIFIER &&
+            this.peek() && this.peek().type === TokenType.EQUAL
+        ) {
+            const name = this.eat(TokenType.IDENTIFIER);
+            this.eat(TokenType.EQUAL);
+            const value = this.pAdditive();
+            this.eat(TokenType.SEMICOLON);
+
+            return {
+                type: NodeType.ASSIGN_VARIABLE,
+                name: name.value,
+                value: value,
+                line: name.line,
+                col: name.column,
+                length: value.col - name.column + value.length
+            }
+        }
+
+        if (
+            this.current.type === TokenType.IDENTIFIER &&
+            this.peek() && (
+                this.peek().type === TokenType.PLUS ||
+                this.peek().type === TokenType.MINUS ||
+                this.peek().type === TokenType.STAR ||
+                this.peek().type === TokenType.SLASH
+            ) &&
+            this.peek(2) && this.peek(2).type === TokenType.EQUAL
+        ) {
+            const name = this.eat(TokenType.IDENTIFIER);
+            const op = this.eat(this.current.type);
+            this.eat(TokenType.EQUAL);
+            
+            const value = this.pAdditive();
+
+            const r = {
+                type: NodeType.ASSIGN_VARIABLE_SHORT,
+                name: name.value,
+                value: value,
+                op: op,
+                line: name.line,
+                col: name.column,
+                length: value.col - name.column + value.length
+            }
+            this.eat(TokenType.SEMICOLON);
+            return r;
+        }
+
         if (this.current.type === TokenType.KEYWORD) {
             if (this.current.value === "var") {
                 const keyw = this.eat(TokenType.KEYWORD);
@@ -358,7 +419,7 @@ export class Parser {
                 const varValue = this.pAdditive();
                 this.eat(TokenType.SEMICOLON);
                 return {
-                    type: NodeType.SET_VARIABLE,
+                    type: NodeType.CREATE_VARIABLE,
                     name: varName.value,
                     value: varValue,
                     line: keyw.line,
@@ -378,6 +439,25 @@ export class Parser {
 
                 return {
                     type: NodeType.IF_STATEMENT,
+                    condition: cond,
+                    body: body,
+                    line: keyw.line,
+                    col: keyw.column,
+                    length: lbr.column - keyw.column + lbr.value.length
+                }
+            }
+            if (this.current.value === "while") {
+                const keyw = this.eat(TokenType.KEYWORD);
+                const cond = this.pCondition();
+                this.eat(TokenType.LEFT_BRACE);
+                const body = [];
+                while (this.current.type !== TokenType.RIGHT_BRACE) {
+                    body.push(this.pExpression());
+                }
+                const lbr = this.eat(TokenType.RIGHT_BRACE);
+
+                return {
+                    type: NodeType.WHILE_STATEMENT,
                     condition: cond,
                     body: body,
                     line: keyw.line,

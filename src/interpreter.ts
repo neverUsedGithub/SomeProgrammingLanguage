@@ -140,28 +140,28 @@ export class ObjectInteger extends InterpObject {
     }
 
     __add__(other: InterpObject) {
-        if (other instanceof ObjectInteger)
+        if (other instanceof ObjectInteger || other instanceof ObjectFloat)
             return new ObjectInteger(this.value + other.value);
         
         return new ObjectVoid();
     }   
 
     __sub__(other: InterpObject) {
-        if (other instanceof ObjectInteger)
+        if (other instanceof ObjectInteger || other instanceof ObjectFloat)
             return new ObjectInteger(this.value - other.value);
         
         return new ObjectVoid();
     }
 
     __mul__(other: InterpObject) {
-        if (other instanceof ObjectInteger)
+        if (other instanceof ObjectInteger || other instanceof ObjectFloat)
             return new ObjectInteger(this.value * other.value);
         
         return new ObjectVoid();
     }
 
     __div__(other: InterpObject) {
-        if (other instanceof ObjectInteger)
+        if (other instanceof ObjectInteger || other instanceof ObjectFloat)
             return new ObjectInteger(this.value / other.value);
         
         return new ObjectVoid();
@@ -186,28 +186,28 @@ export class ObjectFloat extends InterpObject {
     }
 
     __add__(other: InterpObject) {
-        if (other instanceof ObjectFloat)
+        if (other instanceof ObjectFloat || other instanceof ObjectInteger)
             return new ObjectInteger(this.value + other.value);
         
         return new ObjectVoid();
     }   
 
     __sub__(other: InterpObject) {
-        if (other instanceof ObjectFloat)
+        if (other instanceof ObjectFloat || other instanceof ObjectInteger)
             return new ObjectInteger(this.value - other.value);
         
         return new ObjectVoid();
     }
 
     __mul__(other: InterpObject) {
-        if (other instanceof ObjectFloat)
+        if (other instanceof ObjectFloat || other instanceof ObjectInteger)
             return new ObjectInteger(this.value * other.value);
         
         return new ObjectVoid();
     }
 
     __div__(other: InterpObject) {
-        if (other instanceof ObjectFloat)
+        if (other instanceof ObjectFloat || other instanceof ObjectInteger)
             return new ObjectInteger(this.value / other.value);
         
         return new ObjectVoid();
@@ -246,25 +246,90 @@ export class Scope {
     set(name: string, value: any) {
         this.variables[name] = value;
     }
+
+    doesExist(name: string) {
+        if (this.variables[name] !== undefined) {
+            return true;
+        }
+
+        if (this.parent !== null) {
+            return this.parent.doesExist(name);
+        }
+
+        return false;
+    }
 }
 
 export class Interpreter {
-    globalScope: Scope = addBuiltins(new Scope(null));
-    currentScope: Scope = this.globalScope;
+    globalScope: Scope;
+    currentScope: Scope;
 
     constructor(
         public input: string
-    ) {}
+    ) {
+        this.globalScope = addBuiltins(new Scope(null), input);
+        this.currentScope = this.globalScope;
+    }
 
     visit_PROGRAM(node) {
         return node.body.map(x => this.visit(x))
     }
 
-    visit_SETVARIABLE(node) {
+    visit_CREATEVARIABLE(node) {
         const name = node.name;
         const value = this.visit(node.value)
 
+        if (this.currentScope.doesExist(name)) {
+            Error.raiseError(this.input, name.line, name.col, "Runtime Error", "Variable already exists", name.length);
+        }
+
         this.currentScope.set(name, value);
+    }
+    
+    visit_ASSIGNVARIABLE(node) {
+        const name = node.name;
+        const value = this.visit(node.value)
+
+        if (!this.currentScope.doesExist(name)) {
+            Error.raiseError(this.input, name.line, name.col, "Runtime Error", "Variable doesn't exist", name.length);
+        }
+
+        this.currentScope.set(name, value);
+    }
+
+    visit_ASSIGNVARIABLESHORT(node) {
+        const name = node.name;
+        const op = node.op.value;
+        const value = this.visit(node.value)
+
+        if (!this.currentScope.doesExist(name)) {
+            Error.raiseError(this.input, name.line, name.col, "Runtime Error", "Variable doesn't exist", name.length);
+        }
+
+        if (op === "+") {
+            this.currentScope.set(name, this.currentScope.get(name).__add__(value));
+        }
+        if (op === "-") {
+            this.currentScope.set(name, this.currentScope.get(name).__sub__(value));
+        }
+        if (op === "*") {
+            this.currentScope.set(name, this.currentScope.get(name).__mul__(value));
+        }
+        if (op === "/") {
+            this.currentScope.set(name, this.currentScope.get(name).__div__(value));
+        }
+    }
+
+    visit_WHILESTATEMENT(node) {
+        while (true) {
+            const condition = this.visit(node.condition);
+            if (!condition.value)
+                break;
+            
+            for (let n of node.body) {
+                this.visit(n)
+            }
+        }
     }
 
     visit_BOOLEAN(node) {
@@ -347,7 +412,6 @@ export class Interpreter {
         if (typeof left === "function" || typeof right === "function") {
             Error.raiseError(this.input, node.line, node.col, "Runtime Error", `Cannot use function as operand`, node.length)
         }
-
         
         if (op === "+") {
             return left.get("__add__")(right);

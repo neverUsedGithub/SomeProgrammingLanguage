@@ -34,13 +34,12 @@ var b = "hi";
 To modify the value of a variable just type the variables name, `=` and your value.
 
 ```js
-
 a = 5;
-b = b + 5;
+b = 32;
 
+a += 3;
+b -= 10;
 ```
-
-**Note: `+=`, `-=` , `*=`, `/=` are not supported yet.**
 
 #### If statements
 
@@ -52,14 +51,14 @@ if 3 < 10 {
 ```
 Less!
 ```
-### ~~While statements~~ Coming Soon
+### While statements
 
 ```js
 var a = 0;
 
 while a < 10 {
 	print(a);
-	a = a + 1;
+	a += 1;
 }
 ```
 ```

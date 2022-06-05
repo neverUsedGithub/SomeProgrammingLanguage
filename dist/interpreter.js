@@ -140,22 +140,22 @@ var ObjectInteger = /** @class */ (function (_super) {
         return _this;
     }
     ObjectInteger.prototype.__add__ = function (other) {
-        if (other instanceof ObjectInteger)
+        if (other instanceof ObjectInteger || other instanceof ObjectFloat)
             return new ObjectInteger(this.value + other.value);
         return new ObjectVoid();
     };
     ObjectInteger.prototype.__sub__ = function (other) {
-        if (other instanceof ObjectInteger)
+        if (other instanceof ObjectInteger || other instanceof ObjectFloat)
             return new ObjectInteger(this.value - other.value);
         return new ObjectVoid();
     };
     ObjectInteger.prototype.__mul__ = function (other) {
-        if (other instanceof ObjectInteger)
+        if (other instanceof ObjectInteger || other instanceof ObjectFloat)
             return new ObjectInteger(this.value * other.value);
         return new ObjectVoid();
     };
     ObjectInteger.prototype.__div__ = function (other) {
-        if (other instanceof ObjectInteger)
+        if (other instanceof ObjectInteger || other instanceof ObjectFloat)
             return new ObjectInteger(this.value / other.value);
         return new ObjectVoid();
     };
@@ -177,22 +177,22 @@ var ObjectFloat = /** @class */ (function (_super) {
         return _this;
     }
     ObjectFloat.prototype.__add__ = function (other) {
-        if (other instanceof ObjectFloat)
+        if (other instanceof ObjectFloat || other instanceof ObjectInteger)
             return new ObjectInteger(this.value + other.value);
         return new ObjectVoid();
     };
     ObjectFloat.prototype.__sub__ = function (other) {
-        if (other instanceof ObjectFloat)
+        if (other instanceof ObjectFloat || other instanceof ObjectInteger)
             return new ObjectInteger(this.value - other.value);
         return new ObjectVoid();
     };
     ObjectFloat.prototype.__mul__ = function (other) {
-        if (other instanceof ObjectFloat)
+        if (other instanceof ObjectFloat || other instanceof ObjectInteger)
             return new ObjectInteger(this.value * other.value);
         return new ObjectVoid();
     };
     ObjectFloat.prototype.__div__ = function (other) {
-        if (other instanceof ObjectFloat)
+        if (other instanceof ObjectFloat || other instanceof ObjectInteger)
             return new ObjectInteger(this.value / other.value);
         return new ObjectVoid();
     };
@@ -222,23 +222,74 @@ var Scope = /** @class */ (function () {
     Scope.prototype.set = function (name, value) {
         this.variables[name] = value;
     };
+    Scope.prototype.doesExist = function (name) {
+        if (this.variables[name] !== undefined) {
+            return true;
+        }
+        if (this.parent !== null) {
+            return this.parent.doesExist(name);
+        }
+        return false;
+    };
     return Scope;
 }());
 exports.Scope = Scope;
 var Interpreter = /** @class */ (function () {
     function Interpreter(input) {
         this.input = input;
-        this.globalScope = (0, builtins_1.default)(new Scope(null));
+        this.globalScope = (0, builtins_1.default)(new Scope(null), input);
         this.currentScope = this.globalScope;
     }
     Interpreter.prototype.visit_PROGRAM = function (node) {
         var _this = this;
         return node.body.map(function (x) { return _this.visit(x); });
     };
-    Interpreter.prototype.visit_SETVARIABLE = function (node) {
+    Interpreter.prototype.visit_CREATEVARIABLE = function (node) {
         var name = node.name;
         var value = this.visit(node.value);
+        if (this.currentScope.doesExist(name)) {
+            error_1.Error.raiseError(this.input, name.line, name.col, "Runtime Error", "Variable already exists", name.length);
+        }
         this.currentScope.set(name, value);
+    };
+    Interpreter.prototype.visit_ASSIGNVARIABLE = function (node) {
+        var name = node.name;
+        var value = this.visit(node.value);
+        if (!this.currentScope.doesExist(name)) {
+            error_1.Error.raiseError(this.input, name.line, name.col, "Runtime Error", "Variable doesn't exist", name.length);
+        }
+        this.currentScope.set(name, value);
+    };
+    Interpreter.prototype.visit_ASSIGNVARIABLESHORT = function (node) {
+        var name = node.name;
+        var op = node.op.value;
+        var value = this.visit(node.value);
+        if (!this.currentScope.doesExist(name)) {
+            error_1.Error.raiseError(this.input, name.line, name.col, "Runtime Error", "Variable doesn't exist", name.length);
+        }
+        if (op === "+") {
+            this.currentScope.set(name, this.currentScope.get(name).__add__(value));
+        }
+        if (op === "-") {
+            this.currentScope.set(name, this.currentScope.get(name).__sub__(value));
+        }
+        if (op === "*") {
+            this.currentScope.set(name, this.currentScope.get(name).__mul__(value));
+        }
+        if (op === "/") {
+            this.currentScope.set(name, this.currentScope.get(name).__div__(value));
+        }
+    };
+    Interpreter.prototype.visit_WHILESTATEMENT = function (node) {
+        while (true) {
+            var condition = this.visit(node.condition);
+            if (!condition.value)
+                break;
+            for (var _i = 0, _a = node.body; _i < _a.length; _i++) {
+                var n = _a[_i];
+                this.visit(n);
+            }
+        }
     };
     Interpreter.prototype.visit_BOOLEAN = function (node) {
         return new ObjectBool(node.value);

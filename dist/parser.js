@@ -6,8 +6,9 @@ var error_1 = require("./error");
 exports.NodeType = {
     PROGRAM: "PROGRAM",
     BINARY_EXPR: "BINARYEXPRESSION",
-    SET_VARIABLE: "SETVARIABLE",
+    CREATE_VARIABLE: "CREATEVARIABLE",
     GET_VARIABLE: "GETVARIABLE",
+    ASSIGN_VARIABLE: "ASSIGNVARIABLE",
     FUNC_CALL: "FUNCCALL",
     INTEGER: "INTEGER",
     STRING: "STRING",
@@ -18,7 +19,9 @@ exports.NodeType = {
     BOOLEAN: "BOOLEAN",
     CONDITION: "CONDITION",
     IF_STATEMENT: "IFSTATEMENT",
-    FLOAT: "FLOAT"
+    WHILE_STATEMENT: "WHILESTATEMENT",
+    FLOAT: "FLOAT",
+    ASSIGN_VARIABLE_SHORT: "ASSIGNVARIABLESHORT"
 };
 var Parser = /** @class */ (function () {
     function Parser() {
@@ -277,13 +280,23 @@ var Parser = /** @class */ (function () {
             }
             else if (this.current.type === lexer_1.TokenType.LESSTHAN) {
                 this.eat(lexer_1.TokenType.LESSTHAN);
-                this.eat(lexer_1.TokenType.EQUAL);
-                op = "<=";
+                if (this.current.type !== lexer_1.TokenType.EQUAL) {
+                    op = "<";
+                }
+                else {
+                    this.eat(lexer_1.TokenType.EQUAL);
+                    op = "<=";
+                }
             }
-            else {
+            else if (this.current.type === lexer_1.TokenType.MORETHAN) {
                 this.eat(lexer_1.TokenType.MORETHAN);
-                this.eat(lexer_1.TokenType.EQUAL);
-                op = ">=";
+                if (this.current.type !== lexer_1.TokenType.EQUAL) {
+                    op = ">";
+                }
+                else {
+                    this.eat(lexer_1.TokenType.EQUAL);
+                    op = ">=";
+                }
             }
         }
         else {
@@ -311,6 +324,43 @@ var Parser = /** @class */ (function () {
         };
     };
     Parser.prototype.pExpression = function () {
+        if (this.current.type === lexer_1.TokenType.IDENTIFIER &&
+            this.peek() && this.peek().type === lexer_1.TokenType.EQUAL) {
+            var name_5 = this.eat(lexer_1.TokenType.IDENTIFIER);
+            this.eat(lexer_1.TokenType.EQUAL);
+            var value = this.pAdditive();
+            this.eat(lexer_1.TokenType.SEMICOLON);
+            return {
+                type: exports.NodeType.ASSIGN_VARIABLE,
+                name: name_5.value,
+                value: value,
+                line: name_5.line,
+                col: name_5.column,
+                length: value.col - name_5.column + value.length
+            };
+        }
+        if (this.current.type === lexer_1.TokenType.IDENTIFIER &&
+            this.peek() && (this.peek().type === lexer_1.TokenType.PLUS ||
+            this.peek().type === lexer_1.TokenType.MINUS ||
+            this.peek().type === lexer_1.TokenType.STAR ||
+            this.peek().type === lexer_1.TokenType.SLASH) &&
+            this.peek(2) && this.peek(2).type === lexer_1.TokenType.EQUAL) {
+            var name_6 = this.eat(lexer_1.TokenType.IDENTIFIER);
+            var op = this.eat(this.current.type);
+            this.eat(lexer_1.TokenType.EQUAL);
+            var value = this.pAdditive();
+            var r = {
+                type: exports.NodeType.ASSIGN_VARIABLE_SHORT,
+                name: name_6.value,
+                value: value,
+                op: op,
+                line: name_6.line,
+                col: name_6.column,
+                length: value.col - name_6.column + value.length
+            };
+            this.eat(lexer_1.TokenType.SEMICOLON);
+            return r;
+        }
         if (this.current.type === lexer_1.TokenType.KEYWORD) {
             if (this.current.value === "var") {
                 var keyw = this.eat(lexer_1.TokenType.KEYWORD);
@@ -319,7 +369,7 @@ var Parser = /** @class */ (function () {
                 var varValue = this.pAdditive();
                 this.eat(lexer_1.TokenType.SEMICOLON);
                 return {
-                    type: exports.NodeType.SET_VARIABLE,
+                    type: exports.NodeType.CREATE_VARIABLE,
                     name: varName.value,
                     value: varValue,
                     line: keyw.line,
@@ -338,6 +388,24 @@ var Parser = /** @class */ (function () {
                 var lbr = this.eat(lexer_1.TokenType.RIGHT_BRACE);
                 return {
                     type: exports.NodeType.IF_STATEMENT,
+                    condition: cond,
+                    body: body,
+                    line: keyw.line,
+                    col: keyw.column,
+                    length: lbr.column - keyw.column + lbr.value.length
+                };
+            }
+            if (this.current.value === "while") {
+                var keyw = this.eat(lexer_1.TokenType.KEYWORD);
+                var cond = this.pCondition();
+                this.eat(lexer_1.TokenType.LEFT_BRACE);
+                var body = [];
+                while (this.current.type !== lexer_1.TokenType.RIGHT_BRACE) {
+                    body.push(this.pExpression());
+                }
+                var lbr = this.eat(lexer_1.TokenType.RIGHT_BRACE);
+                return {
+                    type: exports.NodeType.WHILE_STATEMENT,
                     condition: cond,
                     body: body,
                     line: keyw.line,
