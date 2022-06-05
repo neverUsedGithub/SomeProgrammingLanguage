@@ -11,9 +11,12 @@ export const NodeType = {
     STRING: "STRING",
     DEFINE_FUNC: "DEFINEFUNC",
     RETURN: "RETURN",
-    CLASS_DEFINE_FUNC: "CLASSDEFINEFUNC",
     PROPERTY_ACCESS: "PROPERTYACCESS",
-    CLASS_DEFINE: "CLASSDEFINE",
+    SET_PROPERTY: "SETPROPERTY",
+    BOOLEAN: "BOOLEAN",
+    CONDITION: "CONDITION",
+    IF_STATEMENT: "IFSTATEMENT",
+    FLOAT: "FLOAT"
 }
 
 export class Parser {
@@ -22,7 +25,7 @@ export class Parser {
     index: number;
     input: string;
 
-    eat(type: string) {
+    eat(type: string): Token {
         if (this.current.type === type) {
             let tok: Token = this.current;
             this.index++;
@@ -30,6 +33,10 @@ export class Parser {
             return tok;
         }
         Error.raiseError(this.input, this.current.line, this.current.column, "Parsing Error", `Expected type '${type}', but got '${this.current.type}'`, this.current.value.length);
+    }
+
+    peek(i: number = 1): Token {
+        return this.tokens[this.index + i];
     }
 
     pPrimary() {
@@ -55,7 +62,18 @@ export class Parser {
                 col: num.column,
                 length: num.value.length
             };
-        } else if (this.current.type === TokenType.IDENTIFIER) {
+        }
+        else if (this.current.type === TokenType.FLOAT) {
+            const num = this.eat(TokenType.FLOAT);
+            return {
+                type: NodeType.FLOAT,
+                value: parseFloat(num.value),
+                line: num.line,
+                col: num.column,
+                length: num.value.length
+            };
+        }
+        else if (this.current.type === TokenType.IDENTIFIER) {
             let name = this.eat(TokenType.IDENTIFIER);
             if (this.current.type === TokenType.LEFT_PAREN) {
                 this.eat(TokenType.LEFT_PAREN);
@@ -87,6 +105,15 @@ export class Parser {
                 line: name.line,
                 col: name.column,
                 length: name.value.length
+            };
+        } else if (this.current.type === TokenType.KEYWORD && (this.current.value === "true" || this.current.value === "false")) {
+            const bool = this.eat(TokenType.KEYWORD);
+            return {
+                type: NodeType.BOOLEAN,
+                value: bool.value === "true",
+                line: bool.line,
+                col: bool.column,
+                length: bool.value.length
             };
         } else if (this.current.type === TokenType.KEYWORD && this.current.value === "func") {
             this.eat(TokenType.KEYWORD);
@@ -158,6 +185,46 @@ export class Parser {
             }
         }
 
+        if (this.current.type === TokenType.DOT) {
+            const dot = this.eat(TokenType.DOT);
+            let name: any = this.eat(TokenType.IDENTIFIER);
+
+            if (this.current.type === TokenType.LEFT_PAREN) {
+                this.eat(TokenType.LEFT_PAREN);
+                
+                let first: boolean = true;
+                const args: any[] = [];
+                while (this.current.type !== TokenType.RIGHT_PAREN) {
+                    if (!first) 
+                        this.eat(TokenType.COMMA)
+                    
+                    args.push(this.pAdditive());
+                    first = false
+                }
+
+                const rpar = this.eat(TokenType.RIGHT_PAREN);
+
+                name = {
+                    type: NodeType.FUNC_CALL,
+                    name: name.value,
+                    arguments: args,
+                    line: name.line,
+                    col: name.column,
+                    length: rpar.column - name.column + name.value.length
+                }
+            }
+
+            node = {
+                type: NodeType.PROPERTY_ACCESS,
+                value: node,
+                property: name,
+                line: node.line,
+                col: node.col,
+                length: dot.column - node.col
+            }
+            return node;
+        }
+
         return node;
     }
 
@@ -222,44 +289,49 @@ export class Parser {
         return node;
     }
 
-    pClassFunction() {
-        let type = null;
-
-        if (this.current.type === TokenType.KEYWORD && (this.current.value === "public" || this.current.value === "private")) {
-            type = this.eat(TokenType.KEYWORD);
+    pCondition() {
+        const left = this.pAdditive();
+        let op
+        if (
+            this.current.type === TokenType.EQUAL ||
+            this.current.type === TokenType.LESSTHAN ||
+            this.current.type === TokenType.MORETHAN ||
+            this.current.type === TokenType.NOT
+        ) {
+            if (this.current.type === TokenType.NOT) {
+                this.eat(TokenType.NOT)
+                this.eat(TokenType.EQUAL)
+                op = "!="
+            }
+            else if (this.current.type === TokenType.EQUAL) {
+                this.eat(TokenType.EQUAL)
+                this.eat(TokenType.EQUAL)
+                op = "=="
+            }
+            else if (this.current.type === TokenType.LESSTHAN) {
+                this.eat(TokenType.LESSTHAN)
+                this.eat(TokenType.EQUAL)
+                op = "<="
+            }
+            else {
+                this.eat(TokenType.MORETHAN)
+                this.eat(TokenType.EQUAL)
+                op = ">="
+            }
         }
-
-        const name = this.eat(TokenType.IDENTIFIER);
-        this.eat(TokenType.LEFT_PAREN);
-        
-        let first: boolean = true;
-        const args: any[] = [];
-        while (this.current.type !== TokenType.RIGHT_PAREN) {
-            if (!first) 
-                this.eat(TokenType.COMMA)
-            
-            args.push(this.eat(TokenType.IDENTIFIER));
-            first = false
+        else {
+            Error.raiseError(this.input, this.current.line, this.current.column, "Parsing Error", `Unexpected token: '${this.current.type}'`, this.current.value.length);
         }
+        const right = this.pAdditive();
 
-        this.eat(TokenType.RIGHT_PAREN);
-        this.eat(TokenType.LEFT_BRACE);
-
-        const body = [];
-        while (this.current.type !== TokenType.RIGHT_BRACE) {
-            body.push(this.pExpression());
-        }
-        this.eat(TokenType.RIGHT_BRACE);
-        
         return {
-            type: NodeType.CLASS_DEFINE_FUNC,
-            name: name.value,
-            arguments: args,
-            body: body,
-            funcType: type,
-            line: name.line,
-            col: name.column,
-            length: name.value.length
+            type: NodeType.CONDITION,
+            left: left,
+            right: right,
+            op: op,
+            line: left.line,
+            col: left.col,
+            length: right.col - left.col + right.length
         }
     }
 
@@ -281,6 +353,25 @@ export class Parser {
                     length: varValue.column - keyw.column + varValue.length
                 }
             }
+            if (this.current.value === "if") {
+                const keyw = this.eat(TokenType.KEYWORD);
+                const cond = this.pCondition();
+                this.eat(TokenType.LEFT_BRACE);
+                const body = [];
+                while (this.current.type !== TokenType.RIGHT_BRACE) {
+                    body.push(this.pExpression());
+                }
+                const lbr = this.eat(TokenType.RIGHT_BRACE);
+
+                return {
+                    type: NodeType.IF_STATEMENT,
+                    condition: cond,
+                    body: body,
+                    line: keyw.line,
+                    col: keyw.column,
+                    length: lbr.column - keyw.column + lbr.value.length
+                }
+            }
             if (this.current.value === "return") {
                 const keyw = this.eat(TokenType.KEYWORD);
                 const returnValue = this.pAdditive();
@@ -293,32 +384,12 @@ export class Parser {
                     length: returnValue.column - keyw.column
                 }
             }
-            if (this.current.value === "class") {
-                const keyw = this.eat(TokenType.KEYWORD);
-                const name = this.eat(TokenType.IDENTIFIER);
-                const lpar = this.eat(TokenType.LEFT_BRACE);
-
-                const body = [];
-
-                while (this.current.type !== TokenType.RIGHT_BRACE) {
-                    body.push(this.pClassFunction());
-                }
-                this.eat(TokenType.RIGHT_BRACE);
-
-                return {
-                    type: NodeType.CLASS_DEFINE,
-                    name: name.value,
-                    body: body,
-                    line: keyw.line,
-                    col: keyw.column,
-                    length: lpar.column - keyw.column + 1
-                }
-            }
         }
 
         const add = this.pAdditive();
         if (add.type !== NodeType.DEFINE_FUNC)
             this.eat(TokenType.SEMICOLON);
+        
         return add;
     }
 

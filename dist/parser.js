@@ -13,9 +13,12 @@ exports.NodeType = {
     STRING: "STRING",
     DEFINE_FUNC: "DEFINEFUNC",
     RETURN: "RETURN",
-    CLASS_DEFINE_FUNC: "CLASSDEFINEFUNC",
     PROPERTY_ACCESS: "PROPERTYACCESS",
-    CLASS_DEFINE: "CLASSDEFINE",
+    SET_PROPERTY: "SETPROPERTY",
+    BOOLEAN: "BOOLEAN",
+    CONDITION: "CONDITION",
+    IF_STATEMENT: "IFSTATEMENT",
+    FLOAT: "FLOAT"
 };
 var Parser = /** @class */ (function () {
     function Parser() {
@@ -28,6 +31,10 @@ var Parser = /** @class */ (function () {
             return tok;
         }
         error_1.Error.raiseError(this.input, this.current.line, this.current.column, "Parsing Error", "Expected type '".concat(type, "', but got '").concat(this.current.type, "'"), this.current.value.length);
+    };
+    Parser.prototype.peek = function (i) {
+        if (i === void 0) { i = 1; }
+        return this.tokens[this.index + i];
     };
     Parser.prototype.pPrimary = function () {
         if (this.current.type === lexer_1.TokenType.PLUS || this.current.type === lexer_1.TokenType.MINUS) {
@@ -47,6 +54,16 @@ var Parser = /** @class */ (function () {
             return {
                 type: exports.NodeType.INTEGER,
                 value: parseInt(num.value),
+                line: num.line,
+                col: num.column,
+                length: num.value.length
+            };
+        }
+        else if (this.current.type === lexer_1.TokenType.FLOAT) {
+            var num = this.eat(lexer_1.TokenType.FLOAT);
+            return {
+                type: exports.NodeType.FLOAT,
+                value: parseFloat(num.value),
                 line: num.line,
                 col: num.column,
                 length: num.value.length
@@ -80,6 +97,16 @@ var Parser = /** @class */ (function () {
                 line: name_1.line,
                 col: name_1.column,
                 length: name_1.value.length
+            };
+        }
+        else if (this.current.type === lexer_1.TokenType.KEYWORD && (this.current.value === "true" || this.current.value === "false")) {
+            var bool = this.eat(lexer_1.TokenType.KEYWORD);
+            return {
+                type: exports.NodeType.BOOLEAN,
+                value: bool.value === "true",
+                line: bool.line,
+                col: bool.column,
+                length: bool.value.length
             };
         }
         else if (this.current.type === lexer_1.TokenType.KEYWORD && this.current.value === "func") {
@@ -146,23 +173,6 @@ var Parser = /** @class */ (function () {
                 length: right.col - node.col + right.length
             };
         }
-        return node;
-    };
-    Parser.prototype.pAdditive = function () {
-        var node = this.pMultiplicative();
-        while (this.current.type === lexer_1.TokenType.PLUS || this.current.type === lexer_1.TokenType.MINUS) {
-            var op = this.eat(this.current.type);
-            var right = this.pMultiplicative();
-            node = {
-                type: exports.NodeType.BINARY_EXPR,
-                left: node,
-                right: right,
-                op: op,
-                line: node.line,
-                col: node.col,
-                length: right.col - node.col + right.length
-            };
-        }
         if (this.current.type === lexer_1.TokenType.DOT) {
             var dot = this.eat(lexer_1.TokenType.DOT);
             var name_3 = this.eat(lexer_1.TokenType.IDENTIFIER);
@@ -198,37 +208,96 @@ var Parser = /** @class */ (function () {
         }
         return node;
     };
-    Parser.prototype.pClassFunction = function () {
-        var type = null;
-        if (this.current.type === lexer_1.TokenType.KEYWORD && (this.current.value === "public" || this.current.value === "private")) {
-            type = this.eat(lexer_1.TokenType.KEYWORD);
+    Parser.prototype.pAdditive = function () {
+        var node = this.pMultiplicative();
+        while (this.current.type === lexer_1.TokenType.PLUS || this.current.type === lexer_1.TokenType.MINUS) {
+            var op = this.eat(this.current.type);
+            var right = this.pMultiplicative();
+            node = {
+                type: exports.NodeType.BINARY_EXPR,
+                left: node,
+                right: right,
+                op: op,
+                line: node.line,
+                col: node.col,
+                length: right.col - node.col + right.length
+            };
         }
-        var name = this.eat(lexer_1.TokenType.IDENTIFIER);
-        this.eat(lexer_1.TokenType.LEFT_PAREN);
-        var first = true;
-        var args = [];
-        while (this.current.type !== lexer_1.TokenType.RIGHT_PAREN) {
-            if (!first)
-                this.eat(lexer_1.TokenType.COMMA);
-            args.push(this.eat(lexer_1.TokenType.IDENTIFIER));
-            first = false;
+        if (this.current.type === lexer_1.TokenType.DOT) {
+            var dot = this.eat(lexer_1.TokenType.DOT);
+            var name_4 = this.eat(lexer_1.TokenType.IDENTIFIER);
+            if (this.current.type === lexer_1.TokenType.LEFT_PAREN) {
+                this.eat(lexer_1.TokenType.LEFT_PAREN);
+                var first = true;
+                var args = [];
+                while (this.current.type !== lexer_1.TokenType.RIGHT_PAREN) {
+                    if (!first)
+                        this.eat(lexer_1.TokenType.COMMA);
+                    args.push(this.pAdditive());
+                    first = false;
+                }
+                var rpar = this.eat(lexer_1.TokenType.RIGHT_PAREN);
+                name_4 = {
+                    type: exports.NodeType.FUNC_CALL,
+                    name: name_4.value,
+                    arguments: args,
+                    line: name_4.line,
+                    col: name_4.column,
+                    length: rpar.column - name_4.column + name_4.value.length
+                };
+            }
+            node = {
+                type: exports.NodeType.PROPERTY_ACCESS,
+                value: node,
+                property: name_4,
+                line: node.line,
+                col: node.col,
+                length: dot.column - node.col
+            };
+            return node;
         }
-        this.eat(lexer_1.TokenType.RIGHT_PAREN);
-        this.eat(lexer_1.TokenType.LEFT_BRACE);
-        var body = [];
-        while (this.current.type !== lexer_1.TokenType.RIGHT_BRACE) {
-            body.push(this.pExpression());
+        return node;
+    };
+    Parser.prototype.pCondition = function () {
+        var left = this.pAdditive();
+        var op;
+        if (this.current.type === lexer_1.TokenType.EQUAL ||
+            this.current.type === lexer_1.TokenType.LESSTHAN ||
+            this.current.type === lexer_1.TokenType.MORETHAN ||
+            this.current.type === lexer_1.TokenType.NOT) {
+            if (this.current.type === lexer_1.TokenType.NOT) {
+                this.eat(lexer_1.TokenType.NOT);
+                this.eat(lexer_1.TokenType.EQUAL);
+                op = "!=";
+            }
+            else if (this.current.type === lexer_1.TokenType.EQUAL) {
+                this.eat(lexer_1.TokenType.EQUAL);
+                this.eat(lexer_1.TokenType.EQUAL);
+                op = "==";
+            }
+            else if (this.current.type === lexer_1.TokenType.LESSTHAN) {
+                this.eat(lexer_1.TokenType.LESSTHAN);
+                this.eat(lexer_1.TokenType.EQUAL);
+                op = "<=";
+            }
+            else {
+                this.eat(lexer_1.TokenType.MORETHAN);
+                this.eat(lexer_1.TokenType.EQUAL);
+                op = ">=";
+            }
         }
-        this.eat(lexer_1.TokenType.RIGHT_BRACE);
+        else {
+            error_1.Error.raiseError(this.input, this.current.line, this.current.column, "Parsing Error", "Unexpected token: '".concat(this.current.type, "'"), this.current.value.length);
+        }
+        var right = this.pAdditive();
         return {
-            type: exports.NodeType.CLASS_DEFINE_FUNC,
-            name: name.value,
-            arguments: args,
-            body: body,
-            funcType: type,
-            line: name.line,
-            col: name.column,
-            length: name.value.length
+            type: exports.NodeType.CONDITION,
+            left: left,
+            right: right,
+            op: op,
+            line: left.line,
+            col: left.col,
+            length: right.col - left.col + right.length
         };
     };
     Parser.prototype.pExpression = function () {
@@ -248,6 +317,24 @@ var Parser = /** @class */ (function () {
                     length: varValue.column - keyw.column + varValue.length
                 };
             }
+            if (this.current.value === "if") {
+                var keyw = this.eat(lexer_1.TokenType.KEYWORD);
+                var cond = this.pCondition();
+                this.eat(lexer_1.TokenType.LEFT_BRACE);
+                var body = [];
+                while (this.current.type !== lexer_1.TokenType.RIGHT_BRACE) {
+                    body.push(this.pExpression());
+                }
+                var lbr = this.eat(lexer_1.TokenType.RIGHT_BRACE);
+                return {
+                    type: exports.NodeType.IF_STATEMENT,
+                    condition: cond,
+                    body: body,
+                    line: keyw.line,
+                    col: keyw.column,
+                    length: lbr.column - keyw.column + lbr.value.length
+                };
+            }
             if (this.current.value === "return") {
                 var keyw = this.eat(lexer_1.TokenType.KEYWORD);
                 var returnValue = this.pAdditive();
@@ -258,24 +345,6 @@ var Parser = /** @class */ (function () {
                     line: keyw.line,
                     col: keyw.column,
                     length: returnValue.column - keyw.column
-                };
-            }
-            if (this.current.value === "class") {
-                var keyw = this.eat(lexer_1.TokenType.KEYWORD);
-                var name_4 = this.eat(lexer_1.TokenType.IDENTIFIER);
-                var lpar = this.eat(lexer_1.TokenType.LEFT_BRACE);
-                var body = [];
-                while (this.current.type !== lexer_1.TokenType.RIGHT_BRACE) {
-                    body.push(this.pClassFunction());
-                }
-                this.eat(lexer_1.TokenType.RIGHT_BRACE);
-                return {
-                    type: exports.NodeType.CLASS_DEFINE,
-                    name: name_4.value,
-                    body: body,
-                    line: keyw.line,
-                    col: keyw.column,
-                    length: lpar.column - keyw.column + 1
                 };
             }
         }

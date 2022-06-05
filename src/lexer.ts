@@ -18,7 +18,11 @@ export const TokenType = {
     IDENTIFIER: "identifier",
     EQUAL: "equal",
     KEYWORD: "keyword",
-    EOF: "eof"
+    EOF: "eof",
+    LESSTHAN: "lessthan",
+    MORETHAN: "morethan",
+    NOT: "not",
+    FLOAT: "float"
 }
 
 export class Token {
@@ -56,7 +60,12 @@ export class Lexer {
         this.colno--;
     }
 
-    
+    peek() {
+        if (this.index + 1 < this.input.length) {
+            return this.input[this.index + 1];
+        }
+        return null;
+    }
 
     lex(str: string) {
         this.input = str;
@@ -79,12 +88,15 @@ export class Lexer {
             "-": TokenType.MINUS,
             "+": TokenType.PLUS,
             "=": TokenType.EQUAL,
+            "<": TokenType.LESSTHAN,
+            ">": TokenType.MORETHAN,
+            "!": TokenType.NOT,
         };
 
         const NUMBERS: string = "0123456789";
         const ALPHABET: string = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
         const SPECIAL: string = "_";
-        const KEYWORDS: string[] = [ "func", "var", "return", "class", "public", "private", "true", "false" ];
+        const KEYWORDS: string[] = [ "func", "var", "return", "true", "false", "if" ];
         const WHITESPACE: string = " \t";
 
         while (this.current !== null) {
@@ -99,6 +111,28 @@ export class Lexer {
             else if (this.current === "\n") {
                 this.lineno++;
                 this.colno = -1;
+            }
+            else if (
+                NUMBERS.indexOf(this.current) !== -1 &&
+                this.peek() && this.peek() === "."
+            ) {
+                let value: string = this.current + this.peek();
+                let start: number = this.colno;
+                this.advance();
+                this.advance();
+
+                while (NUMBERS.indexOf(this.current) !== -1) {
+                    value += this.current;
+                    this.advance();
+                }
+                this.back();
+
+                this.tokens.push(new Token(
+                    TokenType.FLOAT,
+                    value,
+                    this.lineno,
+                    start
+                ))
             }
             else if (NUMBERS.indexOf(this.current) !== -1) {
                 let value: string = "";

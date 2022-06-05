@@ -15,67 +15,28 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.Interpreter = exports.Scope = exports.ObjectInteger = exports.ObjectString = exports.ObjectVoid = exports.InterpObject = exports.ClassDefineObject = exports.ClassObject = void 0;
+exports.Interpreter = exports.Scope = exports.ObjectFloat = exports.ObjectInteger = exports.ObjectBool = exports.ObjectString = exports.ObjectVoid = exports.InterpObject = void 0;
 var error_1 = require("./error");
 var builtins_1 = require("./builtins");
 var parser_1 = require("./parser");
-var ClassObject = /** @class */ (function () {
-    function ClassObject(properties, classname) {
-        this.properties = {};
-        this.properties = properties;
-        this.classname = classname;
-        if (this.properties[classname]) {
-            this.constructorCalled = true;
-            this.properties[classname].call(this, this);
-        }
-    }
-    ClassObject.prototype.get = function (prop) {
-        return this.properties[prop] || new ObjectVoid();
-    };
-    ClassObject.prototype.set = function (prop, value) {
-        this.properties[prop] = value;
-        if (this.properties[this.classname] && !this.constructorCalled) {
-            this.properties[this.classname].call(this, this);
-            this.constructorCalled = true;
-        }
-        return new ObjectVoid();
-    };
-    return ClassObject;
-}());
-exports.ClassObject = ClassObject;
-var ClassDefineObject = /** @class */ (function () {
-    function ClassDefineObject(properties, classname) {
-        this.properties = {};
-        this.properties = properties;
-        this.classname = classname;
-    }
-    ClassDefineObject.prototype.get = function (prop) {
-        return this.properties[prop] || new ObjectVoid();
-    };
-    ClassDefineObject.prototype.getClass = function () {
-        return new ClassObject(this.properties, this.classname);
-    };
-    ClassDefineObject.prototype.__getinstance__ = function () {
-        return this.getClass();
-    };
-    ClassDefineObject.prototype.set = function (prop, value) {
-        this.properties[prop] = value;
-        return new ObjectVoid();
-    };
-    return ClassDefineObject;
-}());
-exports.ClassDefineObject = ClassDefineObject;
 var InterpObject = /** @class */ (function () {
-    function InterpObject(properties, builtin) {
+    function InterpObject(properties, builtin, attributes) {
         if (builtin === void 0) { builtin = false; }
+        if (attributes === void 0) { attributes = {}; }
         this.properties = {};
+        this.attributes = {};
+        this.type = "";
         this.properties = properties;
         this.builtin = builtin;
+        this.attributes = attributes;
     }
     InterpObject.prototype.get = function (prop) {
-        if (this.builtin)
+        if (this.builtin) {
             if (this[prop] !== undefined)
                 return this[prop].bind(this);
+            if (this.attributes[prop])
+                return this.attributes[prop].bind(this)();
+        }
         return this.properties[prop] || new ObjectVoid();
     };
     InterpObject.prototype.set = function (prop, value) {
@@ -88,7 +49,9 @@ exports.InterpObject = InterpObject;
 var ObjectVoid = /** @class */ (function (_super) {
     __extends(ObjectVoid, _super);
     function ObjectVoid() {
-        return _super.call(this, {}, true) || this;
+        var _this = _super.call(this, {}, true) || this;
+        _this.type = "null";
+        return _this;
     }
     ObjectVoid.prototype.__add__ = function () {
         return new ObjectVoid();
@@ -111,7 +74,12 @@ exports.ObjectVoid = ObjectVoid;
 var ObjectString = /** @class */ (function (_super) {
     __extends(ObjectString, _super);
     function ObjectString(str) {
-        var _this = _super.call(this, {}, true) || this;
+        var _this = _super.call(this, {}, true, {
+            length: function () {
+                return new ObjectInteger(_this.value.length);
+            }
+        }) || this;
+        _this.type = "string";
         _this.value = str;
         return _this;
     }
@@ -137,10 +105,37 @@ var ObjectString = /** @class */ (function (_super) {
     return ObjectString;
 }(InterpObject));
 exports.ObjectString = ObjectString;
+var ObjectBool = /** @class */ (function (_super) {
+    __extends(ObjectBool, _super);
+    function ObjectBool(bool) {
+        var _this = _super.call(this, {}, true, {}) || this;
+        _this.type = "bool";
+        _this.value = bool;
+        return _this;
+    }
+    ObjectBool.prototype.__add__ = function (other) {
+        return new ObjectVoid();
+    };
+    ObjectBool.prototype.__sub__ = function () {
+        return new ObjectVoid();
+    };
+    ObjectBool.prototype.__mul__ = function (other) {
+        return new ObjectVoid();
+    };
+    ObjectBool.prototype.__string__ = function () {
+        return this.value ? "true" : "false";
+    };
+    ObjectBool.prototype.__div__ = function () {
+        return new ObjectVoid();
+    };
+    return ObjectBool;
+}(InterpObject));
+exports.ObjectBool = ObjectBool;
 var ObjectInteger = /** @class */ (function (_super) {
     __extends(ObjectInteger, _super);
     function ObjectInteger(value) {
         var _this = _super.call(this, {}, true) || this;
+        _this.type = "integer";
         _this.value = value;
         return _this;
     }
@@ -173,12 +168,47 @@ var ObjectInteger = /** @class */ (function (_super) {
     return ObjectInteger;
 }(InterpObject));
 exports.ObjectInteger = ObjectInteger;
+var ObjectFloat = /** @class */ (function (_super) {
+    __extends(ObjectFloat, _super);
+    function ObjectFloat(value) {
+        var _this = _super.call(this, {}, true) || this;
+        _this.type = "float";
+        _this.value = value;
+        return _this;
+    }
+    ObjectFloat.prototype.__add__ = function (other) {
+        if (other instanceof ObjectFloat)
+            return new ObjectInteger(this.value + other.value);
+        return new ObjectVoid();
+    };
+    ObjectFloat.prototype.__sub__ = function (other) {
+        if (other instanceof ObjectFloat)
+            return new ObjectInteger(this.value - other.value);
+        return new ObjectVoid();
+    };
+    ObjectFloat.prototype.__mul__ = function (other) {
+        if (other instanceof ObjectFloat)
+            return new ObjectInteger(this.value * other.value);
+        return new ObjectVoid();
+    };
+    ObjectFloat.prototype.__div__ = function (other) {
+        if (other instanceof ObjectFloat)
+            return new ObjectInteger(this.value / other.value);
+        return new ObjectVoid();
+    };
+    ObjectFloat.prototype.__string__ = function () {
+        return this.value.toString();
+    };
+    ObjectFloat.prototype.toString = function () {
+        return new ObjectString(this.value.toString());
+    };
+    return ObjectFloat;
+}(InterpObject));
+exports.ObjectFloat = ObjectFloat;
 var Scope = /** @class */ (function () {
-    function Scope(parent, isClass) {
-        if (isClass === void 0) { isClass = false; }
+    function Scope(parent) {
         this.variables = {};
         this.parent = parent;
-        this.isClass = isClass;
     }
     Scope.prototype.get = function (name) {
         if (this.variables[name] !== undefined) {
@@ -210,10 +240,12 @@ var Interpreter = /** @class */ (function () {
         var value = this.visit(node.value);
         this.currentScope.set(name, value);
     };
+    Interpreter.prototype.visit_BOOLEAN = function (node) {
+        return new ObjectBool(node.value);
+    };
     Interpreter.prototype.visit_PROPERTYACCESS = function (node) {
         var _this = this;
         var value = this.visit(node.value);
-        console.log(value, node.value);
         if (node.property.type === parser_1.NodeType.FUNC_CALL) {
             var func = value.get(node.property.name);
             if (func instanceof ObjectVoid) {
@@ -227,39 +259,6 @@ var Interpreter = /** @class */ (function () {
             return value.get(node.property.value);
         }
     };
-    Interpreter.prototype.visit_CLASSDEFINEFUNC = function (node) {
-        var _this = this;
-        var func = function () {
-            var args = [];
-            for (var _i = 0; _i < arguments.length; _i++) {
-                args[_i] = arguments[_i];
-            }
-            var funcScope = new Scope(_this.currentScope);
-            _this.currentScope = funcScope;
-            for (var i = 0; i < args.length; i++) {
-                _this.currentScope.set(node.arguments[i].value, args[i]);
-            }
-            node.body.map(function (x) { return _this.visit(x); });
-            _this.currentScope = funcScope.parent;
-            var result = funcScope.returnValue;
-            return result;
-        };
-        return { function: func, name: node.name };
-    };
-    Interpreter.prototype.visit_CLASSDEFINE = function (node) {
-        var _this = this;
-        var myclass = new ClassDefineObject({}, node.name);
-        var properties = node.body.map(function (x) { return _this.visit(x); });
-        for (var _i = 0, properties_1 = properties; _i < properties_1.length; _i++) {
-            var prop = properties_1[_i];
-            if (typeof prop.name === "string")
-                myclass.set(prop.name, prop.function);
-            else
-                throw new SyntaxError("how the heck did you get here? please report this to the dev thx");
-        }
-        this.currentScope.set(node.name, myclass);
-        return new ObjectVoid();
-    };
     Interpreter.prototype.visit_FUNCCALL = function (node) {
         var _this = this;
         var func = node.name;
@@ -268,11 +267,8 @@ var Interpreter = /** @class */ (function () {
         if (funcValue instanceof ObjectVoid) {
             error_1.Error.raiseError(this.input, node.line, node.column, "Runtime Error", "Function '".concat(func, "' is not defined"), func.length);
         }
-        if (typeof funcValue !== "function" && !(funcValue instanceof ClassDefineObject)) {
+        if (typeof funcValue !== "function") {
             error_1.Error.raiseError(this.input, node.line, node.column, "Runtime Error", "'".concat(func, "' is not a function"), func.length);
-        }
-        if (funcValue instanceof ClassDefineObject) {
-            return funcValue.__getinstance__();
         }
         var result = funcValue.apply(void 0, args);
         return result;
@@ -297,6 +293,9 @@ var Interpreter = /** @class */ (function () {
     };
     Interpreter.prototype.visit_INTEGER = function (node) {
         return new ObjectInteger(node.value);
+    };
+    Interpreter.prototype.visit_FLOAT = function (node) {
+        return new ObjectFloat(node.value);
     };
     Interpreter.prototype.visit_BINARYEXPRESSION = function (node) {
         var left = this.visit(node.left);
@@ -336,6 +335,95 @@ var Interpreter = /** @class */ (function () {
             return result;
         };
         this.currentScope.set(node.name, func);
+    };
+    Interpreter.prototype.visit_CONDITION = function (node) {
+        var left = this.visit(node.left);
+        var right = this.visit(node.right);
+        var op = node.op;
+        if (typeof left === "function" || typeof right === "function") {
+            error_1.Error.raiseError(this.input, node.line, node.col, "Runtime Error", "Cannot compare functions", node.length);
+        }
+        if (left instanceof ObjectVoid || right instanceof ObjectVoid) {
+            return new ObjectBool(false);
+        }
+        if (left instanceof ObjectString && right instanceof ObjectString) {
+            if (op === "==") {
+                return new ObjectBool(left.value === right.value);
+            }
+            else if (op === "!=") {
+                return new ObjectBool(left.value !== right.value);
+            }
+            else {
+                error_1.Error.raiseError(this.input, node.line, node.col, "Runtime Error", "Cannot compare strings with '".concat(op, "'"), node.length);
+            }
+        }
+        if (left instanceof ObjectInteger && right instanceof ObjectInteger) {
+            if (op === "==") {
+                return new ObjectBool(left.value === right.value);
+            }
+            else if (op === "!=") {
+                return new ObjectBool(left.value !== right.value);
+            }
+            else if (op === "<") {
+                return new ObjectBool(left.value < right.value);
+            }
+            else if (op === "<=") {
+                return new ObjectBool(left.value <= right.value);
+            }
+            else if (op === ">") {
+                return new ObjectBool(left.value > right.value);
+            }
+            else if (op === ">=") {
+                return new ObjectBool(left.value >= right.value);
+            }
+            else {
+                error_1.Error.raiseError(this.input, node.line, node.col, "Runtime Error", "Cannot compare integers with '".concat(op, "'"), node.length);
+            }
+        }
+        if (left instanceof ObjectFloat && right instanceof ObjectFloat) {
+            if (op === "==") {
+                return new ObjectBool(left.value === right.value);
+            }
+            else if (op === "!=") {
+                return new ObjectBool(left.value !== right.value);
+            }
+            else if (op === "<") {
+                return new ObjectBool(left.value < right.value);
+            }
+            else if (op === "<=") {
+                return new ObjectBool(left.value <= right.value);
+            }
+            else if (op === ">") {
+                return new ObjectBool(left.value > right.value);
+            }
+            else if (op === ">=") {
+                return new ObjectBool(left.value >= right.value);
+            }
+            else {
+                error_1.Error.raiseError(this.input, node.line, node.col, "Runtime Error", "Cannot compare integers with '".concat(op, "'"), node.length);
+            }
+        }
+        if (left instanceof ObjectBool && right instanceof ObjectBool) {
+            if (op === "==") {
+                return new ObjectBool(left.value === right.value);
+            }
+            else if (op === "!=") {
+                return new ObjectBool(left.value !== right.value);
+            }
+            else {
+                error_1.Error.raiseError(this.input, node.line, node.col, "Runtime Error", "Cannot compare booleans with '".concat(op, "'"), node.length);
+            }
+        }
+        error_1.Error.raiseError(this.input, node.line, node.col, "Runtime Error", "Cannot compare '".concat(left.type, "' with '").concat(right.type, "'"), node.length);
+    };
+    Interpreter.prototype.visit_IFSTATEMENT = function (node) {
+        var condition = this.visit(node.condition);
+        if (condition.value) {
+            for (var _i = 0, _a = node.body; _i < _a.length; _i++) {
+                var n = _a[_i];
+                this.visit(n);
+            }
+        }
     };
     Interpreter.prototype.visit = function (node) {
         if (this["visit_" + node.type]) {

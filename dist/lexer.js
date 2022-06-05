@@ -20,7 +20,11 @@ exports.TokenType = {
     IDENTIFIER: "identifier",
     EQUAL: "equal",
     KEYWORD: "keyword",
-    EOF: "eof"
+    EOF: "eof",
+    LESSTHAN: "lessthan",
+    MORETHAN: "morethan",
+    NOT: "not",
+    FLOAT: "float"
 };
 var Token = /** @class */ (function () {
     function Token(type, value, line, column) {
@@ -51,6 +55,12 @@ var Lexer = /** @class */ (function () {
         }
         this.colno--;
     };
+    Lexer.prototype.peek = function () {
+        if (this.index + 1 < this.input.length) {
+            return this.input[this.index + 1];
+        }
+        return null;
+    };
     Lexer.prototype.lex = function (str) {
         this.input = str;
         this.index = -1;
@@ -71,11 +81,14 @@ var Lexer = /** @class */ (function () {
             "-": exports.TokenType.MINUS,
             "+": exports.TokenType.PLUS,
             "=": exports.TokenType.EQUAL,
+            "<": exports.TokenType.LESSTHAN,
+            ">": exports.TokenType.MORETHAN,
+            "!": exports.TokenType.NOT,
         };
         var NUMBERS = "0123456789";
         var ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
         var SPECIAL = "_";
-        var KEYWORDS = ["func", "var", "return", "class", "public", "private", "true", "false"];
+        var KEYWORDS = ["func", "var", "return", "true", "false", "if"];
         var WHITESPACE = " \t";
         while (this.current !== null) {
             if (Object.keys(SINGLE_TOKENS).indexOf(this.current) !== -1) {
@@ -84,6 +97,19 @@ var Lexer = /** @class */ (function () {
             else if (this.current === "\n") {
                 this.lineno++;
                 this.colno = -1;
+            }
+            else if (NUMBERS.indexOf(this.current) !== -1 &&
+                this.peek() && this.peek() === ".") {
+                var value = this.current + this.peek();
+                var start = this.colno;
+                this.advance();
+                this.advance();
+                while (NUMBERS.indexOf(this.current) !== -1) {
+                    value += this.current;
+                    this.advance();
+                }
+                this.back();
+                this.tokens.push(new Token(exports.TokenType.FLOAT, value, this.lineno, start));
             }
             else if (NUMBERS.indexOf(this.current) !== -1) {
                 var value = "";

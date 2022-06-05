@@ -2,74 +2,26 @@ import { Error } from "./error"
 import addBuiltins from "./builtins"
 import { NodeType } from "./parser";
 
-export class ClassObject {
-    properties: { [key: string]: any } = {};
-    constructorCalled: boolean;
-    classname: string;
-
-    constructor(properties: { [key: string]: any }, classname: string) {
-        this.properties = properties;
-        this.classname = classname;
-        if (this.properties[classname]) {
-            this.constructorCalled = true;
-            this.properties[classname].call(this, this);
-        }
-    }
-
-    get(prop: string) {
-        return this.properties[prop] || new ObjectVoid()
-    }
-
-    set(prop: string, value: any) {
-        this.properties[prop] = value;
-        if (this.properties[this.classname] && !this.constructorCalled) {
-            this.properties[this.classname].call(this, this);
-            this.constructorCalled = true;
-        }
-        return new ObjectVoid();
-    }
-}
-
-export class ClassDefineObject {
-    properties: { [key: string]: any } = {};
-    classname: string;
-
-    constructor(properties: { [key: string]: any }, classname: string) {
-        this.properties = properties;
-        this.classname = classname;
-    }
-
-    get(prop: string) {
-        return this.properties[prop] || new ObjectVoid()
-    }
-
-    getClass() {
-        return new ClassObject(this.properties, this.classname);
-    }
-
-    __getinstance__() {
-        return this.getClass();
-    }
-
-    set(prop: string, value: any) {
-        this.properties[prop] = value;
-        return new ObjectVoid();
-    }
-}
-
 export class InterpObject {
     properties: { [key: string]: any } = {};
     builtin: boolean;
+    attributes: { [key: string]: Function } = {};
+    type: string = "";
+    value;
 
-    constructor(properties: { [key: string]: any }, builtin = false) {
+    constructor(properties: { [key: string]: any }, builtin = false, attributes: { [key: string]: Function } = {}) {
         this.properties = properties;
         this.builtin = builtin;
+        this.attributes = attributes;
     }
 
     get(prop: string) {
-        if (this.builtin)
+        if (this.builtin) {
             if (this[prop] !== undefined)
                 return this[prop].bind(this);
+            if (this.attributes[prop])
+                return this.attributes[prop].bind(this)();
+        }
 
         return this.properties[prop] || new ObjectVoid()
     }
@@ -81,6 +33,8 @@ export class InterpObject {
 }
 
 export class ObjectVoid extends InterpObject {
+    type: string = "null";
+
     constructor() {
         super({}, true);
     }
@@ -108,9 +62,14 @@ export class ObjectVoid extends InterpObject {
 
 export class ObjectString extends InterpObject {
     value: string;
+    type: string = "string";
 
     constructor(str: string) {
-        super({}, true);
+        super({}, true, {
+            length: () => {
+                return new ObjectInteger(this.value.length);
+            } 
+        });
         this.value = str;
     }
 
@@ -141,8 +100,39 @@ export class ObjectString extends InterpObject {
     }
 }
 
+export class ObjectBool extends InterpObject {
+    value: boolean;
+    type: string = "bool";
+
+    constructor(bool: boolean) {
+        super({}, true, {});
+        this.value = bool;
+    }
+
+    __add__(other: any) {
+        return new ObjectVoid();
+    }
+
+    __sub__() {
+        return new ObjectVoid();
+    }
+
+    __mul__(other: any) {
+        return new ObjectVoid();
+    }
+
+    __string__() {
+        return this.value ? "true" : "false";
+    }
+
+    __div__() {
+        return new ObjectVoid();
+    }
+}
+
 export class ObjectInteger extends InterpObject {
     value: number;
+    type: string = "integer";
 
     constructor(value: number) {
         super({}, true);
@@ -186,15 +176,59 @@ export class ObjectInteger extends InterpObject {
     }
 }
 
+export class ObjectFloat extends InterpObject {
+    value: number;
+    type: string = "float";
+
+    constructor(value: number) {
+        super({}, true);
+        this.value = value;
+    }
+
+    __add__(other: InterpObject) {
+        if (other instanceof ObjectFloat)
+            return new ObjectInteger(this.value + other.value);
+        
+        return new ObjectVoid();
+    }   
+
+    __sub__(other: InterpObject) {
+        if (other instanceof ObjectFloat)
+            return new ObjectInteger(this.value - other.value);
+        
+        return new ObjectVoid();
+    }
+
+    __mul__(other: InterpObject) {
+        if (other instanceof ObjectFloat)
+            return new ObjectInteger(this.value * other.value);
+        
+        return new ObjectVoid();
+    }
+
+    __div__(other: InterpObject) {
+        if (other instanceof ObjectFloat)
+            return new ObjectInteger(this.value / other.value);
+        
+        return new ObjectVoid();
+    }
+
+    __string__() {
+        return this.value.toString();
+    }
+
+    toString() {
+        return new ObjectString(this.value.toString());
+    }
+}
+
 export class Scope {
     parent: Scope | null;
     variables: { [key: string]: any } = {};
     returnValue: any;
-    isClass: boolean;
 
-    constructor(parent: Scope | null, isClass: boolean = false) {
+    constructor(parent: Scope | null) {
         this.parent = parent;
-        this.isClass = isClass;
     }
 
     get(name: string) {
@@ -233,10 +267,12 @@ export class Interpreter {
         this.currentScope.set(name, value);
     }
 
+    visit_BOOLEAN(node) {
+        return new ObjectBool(node.value);
+    }
+
     visit_PROPERTYACCESS(node) {
         const value = this.visit(node.value);
-
-        console.log(value, node.value)
 
         if (node.property.type === NodeType.FUNC_CALL) {
             const func = value.get(node.property.name);
@@ -254,41 +290,6 @@ export class Interpreter {
             return value.get(node.property.value);
         }
     }
-
-    visit_CLASSDEFINEFUNC(node) {
-        const func = (...args) => {
-            const funcScope = new Scope(this.currentScope);
-            this.currentScope = funcScope;
-            
-            for (let i = 0; i < args.length; i++) {
-                this.currentScope.set(node.arguments[i].value, args[i]);
-            }
-
-            node.body.map(x => this.visit(x))
-            this.currentScope = funcScope.parent;
-
-            const result = funcScope.returnValue;
-            return result;
-        }
-
-        return { function: func, name: node.name };
-    }
-
-    visit_CLASSDEFINE(node) {
-        const myclass: ClassDefineObject = new ClassDefineObject({}, node.name);
-        const properties: { [key: string]: string | Function }[] = node.body.map(x => this.visit(x))
-        
-        for (let prop of properties) {
-            if (typeof prop.name === "string")
-                myclass.set(prop.name, prop.function);
-            else 
-                throw new SyntaxError("how the heck did you get here? please report this to the dev thx");
-        }
-
-        this.currentScope.set(node.name, myclass);
-
-        return new ObjectVoid();
-    }
     
     visit_FUNCCALL(node) {
         const func = node.name;
@@ -299,12 +300,8 @@ export class Interpreter {
             Error.raiseError(this.input, node.line, node.column, "Runtime Error", `Function '${func}' is not defined`, func.length);
         }
 
-        if (typeof funcValue !== "function" && !(funcValue instanceof ClassDefineObject)) {
+        if (typeof funcValue !== "function") {
             Error.raiseError(this.input, node.line, node.column, "Runtime Error", `'${func}' is not a function`, func.length);
-        }
-
-        if (funcValue instanceof ClassDefineObject) {
-            return funcValue.__getinstance__();
         }
 
         const result = funcValue(...args);
@@ -336,6 +333,10 @@ export class Interpreter {
 
     visit_INTEGER(node) {
         return new ObjectInteger(node.value);
+    }
+
+    visit_FLOAT(node) {
+        return new ObjectFloat(node.value);
     }
     
     visit_BINARYEXPRESSION(node) {
@@ -382,7 +383,105 @@ export class Interpreter {
         this.currentScope.set(node.name, func);
     }
 
-    visit(node) {
+    visit_CONDITION(node) {
+        const left = this.visit(node.left);
+        const right = this.visit(node.right);
+        const op = node.op;
+
+        if (typeof left === "function" || typeof right === "function") {
+            Error.raiseError(this.input, node.line, node.col, "Runtime Error", `Cannot compare functions`, node.length)
+        }
+
+        if (left instanceof ObjectVoid || right instanceof ObjectVoid) {
+            return new ObjectBool(false);
+        }
+
+        if (left instanceof ObjectString && right instanceof ObjectString) {
+            if (op === "==") {
+                return new ObjectBool(left.value === right.value);
+            }
+            else if (op === "!=") {
+                return new ObjectBool(left.value !== right.value);
+            }
+            else {
+                Error.raiseError(this.input, node.line, node.col, "Runtime Error", `Cannot compare strings with '${op}'`, node.length)
+            }
+        }
+
+        if (left instanceof ObjectInteger && right instanceof ObjectInteger) {
+            if (op === "==") {
+                return new ObjectBool(left.value === right.value);
+            }
+            else if (op === "!=") {
+                return new ObjectBool(left.value !== right.value);
+            }
+            else if (op === "<") {
+                return new ObjectBool(left.value < right.value);
+            }
+            else if (op === "<=") {
+                return new ObjectBool(left.value <= right.value);
+            }
+            else if (op === ">") {
+                return new ObjectBool(left.value > right.value);
+            }
+            else if (op === ">=") {
+                return new ObjectBool(left.value >= right.value);
+            }
+            else {
+                Error.raiseError(this.input, node.line, node.col, "Runtime Error", `Cannot compare integers with '${op}'`, node.length)
+            }
+        }
+
+        if (left instanceof ObjectFloat && right instanceof ObjectFloat) {
+            if (op === "==") {
+                return new ObjectBool(left.value === right.value);
+            }
+            else if (op === "!=") {
+                return new ObjectBool(left.value !== right.value);
+            }
+            else if (op === "<") {
+                return new ObjectBool(left.value < right.value);
+            }
+            else if (op === "<=") {
+                return new ObjectBool(left.value <= right.value);
+            }
+            else if (op === ">") {
+                return new ObjectBool(left.value > right.value);
+            }
+            else if (op === ">=") {
+                return new ObjectBool(left.value >= right.value);
+            }
+            else {
+                Error.raiseError(this.input, node.line, node.col, "Runtime Error", `Cannot compare integers with '${op}'`, node.length)
+            }
+        }
+
+        if (left instanceof ObjectBool && right instanceof ObjectBool) {
+            if (op === "==") {
+                return new ObjectBool(left.value === right.value);
+            }
+            else if (op === "!=") {
+                return new ObjectBool(left.value !== right.value);
+            }
+            else {
+                Error.raiseError(this.input, node.line, node.col, "Runtime Error", `Cannot compare booleans with '${op}'`, node.length)
+            }
+        }
+
+        Error.raiseError(this.input, node.line, node.col, "Runtime Error", `Cannot compare '${left.type}' with '${right.type}'`, node.length)
+    }
+
+    visit_IFSTATEMENT(node) {
+        const condition = this.visit(node.condition);
+
+        if (condition.value) {
+            for (let n of node.body) {
+                this.visit(n)
+            }
+        }
+    }
+
+    visit(node): InterpObject {
         if (this["visit_" + node.type]) {
             return this["visit_" + node.type].call(this, node)
         }

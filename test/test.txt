@@ -1,5 +1,5 @@
-func greet(str) {
-    return "Hello " + str;
-}
+var a = "string";
 
-print(greet("world!"));
+if a.length == 6 {
+    print("a is 6 characters long");
+}
