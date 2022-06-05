@@ -96,7 +96,7 @@ export class Lexer {
         const NUMBERS: string = "0123456789";
         const ALPHABET: string = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
         const SPECIAL: string = "_";
-        const KEYWORDS: string[] = [ "func", "var", "return", "true", "false", "if" ];
+        const KEYWORDS: string[] = [ "func", "var", "return", "true", "false", "if", "while" ];
         const WHITESPACE: string = " \t";
 
         while (this.current !== null) {

@@ -338,6 +338,17 @@ var Interpreter = /** @class */ (function () {
     };
     Interpreter.prototype.visit_CONDITION = function (node) {
         var left = this.visit(node.left);
+        if (node.right === undefined) {
+            if (left instanceof ObjectBool && left.value) {
+                return new ObjectBool(true);
+            }
+            else if (left instanceof ObjectBool && !left.value) {
+                return new ObjectBool(false);
+            }
+            else {
+                error_1.Error.raiseError(this.input, node.line, node.column, "Runtime Error", "Cannot use '".concat(left, "' as condition"), node.length);
+            }
+        }
         var right = this.visit(node.right);
         var op = node.op;
         if (typeof left === "function" || typeof right === "function") {

@@ -88,7 +88,7 @@ var Lexer = /** @class */ (function () {
         var NUMBERS = "0123456789";
         var ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
         var SPECIAL = "_";
-        var KEYWORDS = ["func", "var", "return", "true", "false", "if"];
+        var KEYWORDS = ["func", "var", "return", "true", "false", "if", "while"];
         var WHITESPACE = " \t";
         while (this.current !== null) {
             if (Object.keys(SINGLE_TOKENS).indexOf(this.current) !== -1) {

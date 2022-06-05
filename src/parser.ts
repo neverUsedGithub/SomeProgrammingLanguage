@@ -291,6 +291,7 @@ export class Parser {
 
     pCondition() {
         const left = this.pAdditive();
+
         let op
         if (
             this.current.type === TokenType.EQUAL ||
@@ -320,6 +321,19 @@ export class Parser {
             }
         }
         else {
+            if (
+                left.type === NodeType.BOOLEAN ||
+                left.type === NodeType.PROPERTY_ACCESS
+            ) {
+                return {
+                    type: NodeType.CONDITION,
+                    left: left,
+                    line: left.line,
+                    col: left.col,
+                    length: left.length
+                }
+            }
+            console.log(left.type)
             Error.raiseError(this.input, this.current.line, this.current.column, "Parsing Error", `Unexpected token: '${this.current.type}'`, this.current.value.length);
         }
         const right = this.pAdditive();

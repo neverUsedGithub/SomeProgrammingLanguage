@@ -385,6 +385,19 @@ export class Interpreter {
 
     visit_CONDITION(node) {
         const left = this.visit(node.left);
+
+        if (node.right === undefined) {
+            if (left instanceof ObjectBool && left.value) {
+                return new ObjectBool(true);
+            }
+            else if (left instanceof ObjectBool && !left.value) {
+                return new ObjectBool(false);
+            }
+            else {
+                Error.raiseError(this.input, node.line, node.column, "Runtime Error", `Cannot use '${left}' as condition`, node.length);
+            }
+        }
+
         const right = this.visit(node.right);
         const op = node.op;
 

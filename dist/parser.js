@@ -287,6 +287,17 @@ var Parser = /** @class */ (function () {
             }
         }
         else {
+            if (left.type === exports.NodeType.BOOLEAN ||
+                left.type === exports.NodeType.PROPERTY_ACCESS) {
+                return {
+                    type: exports.NodeType.CONDITION,
+                    left: left,
+                    line: left.line,
+                    col: left.col,
+                    length: left.length
+                };
+            }
+            console.log(left.type);
             error_1.Error.raiseError(this.input, this.current.line, this.current.column, "Parsing Error", "Unexpected token: '".concat(this.current.type, "'"), this.current.value.length);
         }
         var right = this.pAdditive();
