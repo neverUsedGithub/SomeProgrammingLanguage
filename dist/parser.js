@@ -297,7 +297,6 @@ var Parser = /** @class */ (function () {
                     length: left.length
                 };
             }
-            console.log(left.type);
             error_1.Error.raiseError(this.input, this.current.line, this.current.column, "Parsing Error", "Unexpected token: '".concat(this.current.type, "'"), this.current.value.length);
         }
         var right = this.pAdditive();
