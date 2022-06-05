@@ -333,7 +333,6 @@ export class Parser {
                     length: left.length
                 }
             }
-            console.log(left.type)
             Error.raiseError(this.input, this.current.line, this.current.column, "Parsing Error", `Unexpected token: '${this.current.type}'`, this.current.value.length);
         }
         const right = this.pAdditive();
