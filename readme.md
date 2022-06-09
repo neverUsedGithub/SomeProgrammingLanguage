@@ -1,6 +1,6 @@
 # Some programming language
 
-This is a very basic interpreted programming language. If you find any bugs please write to me on discord: `neverUsedDiscord#1120`.
+This is a very basic interpreted programming language.
 
 # Basics
 
