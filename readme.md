@@ -45,7 +45,7 @@ b -= 10;
 
 ```go
 if 3 < 10 {
-	print("Less!");
+  print("Less!");
 }
 ```
 ```
@@ -57,8 +57,8 @@ Less!
 var a = 0;
 
 while a < 10 {
-	print(a);
-	a += 1;
+  print(a);
+  a += 1;
 }
 ```
 ```
@@ -69,7 +69,7 @@ while a < 10 {
 ### Functions
 ```go
 func greet(str) {
-	return "Hello " + str;
+  return "Hello " + str;
 }
 
 print(greet("world!"));
